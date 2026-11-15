@@ -146,6 +146,8 @@
     <h2>Ajustes</h2>
     <label for="a-nombre">Tu nombre (queda en el historial)</label>
     <input id="a-nombre">
+    <label for="a-url">URL del script (termina en /exec)</label>
+    <input id="a-url" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
     <label for="a-clave">Clave de acceso</label>
     <input id="a-clave" type="password">
     <button class="principal" id="a-guardar">Guardar y probar conexión</button>
@@ -169,28 +171,32 @@
 <div id="etiqueta"></div>
 
 <script>
-// ====== 1) PEGÁ ACÁ LA URL DE TU SCRIPT (termina en /exec) ======
+// URL del script. Se puede pegar acá (vale para todos los celulares)
+// o cargar en la pantalla Ajustes de cada celular.
 const API_URL = 'PEGAR_AQUI_LA_URL_DEL_SCRIPT';
-// ================================================================
 
 const $ = s => document.querySelector(s);
 
 // ---------- Ajustes guardados en el celular ----------
 function leerAjuste(k) { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } }
 function guardarAjuste(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
-const ajustes = { nombre: leerAjuste('nombre'), clave: leerAjuste('clave') };
+const ajustes = { nombre: leerAjuste('nombre'), clave: leerAjuste('clave'), url: leerAjuste('url') };
+const urlScript = () => (API_URL.startsWith('https://') ? API_URL : ajustes.url).trim();
+$('#a-url').value = urlScript();
 $('#a-nombre').value = ajustes.nombre;
 $('#a-clave').value = ajustes.clave;
 $('#usuario-header').textContent = ajustes.nombre;
 
 // ---------- Comunicación con la planilla ----------
 async function api(accion, datos = {}, escribir = false) {
-  if (API_URL.startsWith('PEGAR')) throw new Error('Falta configurar API_URL en index.html');
+  const url = urlScript();
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url))
+    throw new Error('Falta la URL del script (o está incompleta). Cargala en Ajustes: tiene que terminar en /exec.');
   const base = { accion, clave: ajustes.clave, usuario: ajustes.nombre };
   const resp = escribir
-    ? await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    ? await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                              body: JSON.stringify({ ...base, ...datos }) })
-    : await fetch(API_URL + '?' + new URLSearchParams({ ...base, ...datos }));
+    : await fetch(url + '?' + new URLSearchParams({ ...base, ...datos }));
   const json = await resp.json();
   if (!json.ok) { const e = new Error(json.error); e.codigo = json.codigo; throw e; }
   return json.data;
@@ -427,13 +433,14 @@ $('#s-boton').onclick = () => conCarga($('#s-boton'), async () => {
 // ---------- AJUSTES ----------
 $('#a-guardar').onclick = () => conCarga($('#a-guardar'), async () => {
   ajustes.nombre = $('#a-nombre').value.trim(); ajustes.clave = $('#a-clave').value;
+  ajustes.url = $('#a-url').value.trim(); guardarAjuste('url', ajustes.url);
   guardarAjuste('nombre', ajustes.nombre); guardarAjuste('clave', ajustes.clave);
   $('#usuario-header').textContent = ajustes.nombre;
   await api('ping');
   avisar('Conectado a la planilla ✔');
 });
 
-if (!ajustes.nombre) ir('ajustes');
+if (!ajustes.nombre || !urlScript()) ir('ajustes');
 </script>
 </body>
 </html>
