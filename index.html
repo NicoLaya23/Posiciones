@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3a5f">
+<title>Depósito – Posiciones</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+  :root { --azul:#1f3a5f; --azul2:#2d5a8e; --fondo:#f2f4f7; --borde:#d5dae1; --texto:#1b1f24;
+          --gris:#5f6b7a; --rojo:#c0392b; --naranja:#d68910; --verde:#1e8449; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--fondo);
+         color:var(--texto); font-size:17px; padding-bottom:84px; }
+  header { background:var(--azul); color:#fff; padding:14px 16px; font-weight:700; font-size:19px;
+           display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; z-index:5; }
+  header small { font-weight:400; opacity:.8; font-size:14px; }
+  main { padding:16px; max-width:560px; margin:0 auto; }
+  section { display:none; } section.activa { display:block; }
+  h2 { margin:4px 0 14px; font-size:21px; }
+  label { display:block; font-size:14px; color:var(--gris); margin:14px 0 6px; font-weight:600; }
+  .campo { display:flex; gap:8px; }
+  input { width:100%; font-size:19px; padding:13px 12px; border:1.5px solid var(--borde); border-radius:10px;
+          background:#fff; color:var(--texto); }
+  input:focus { outline:none; border-color:var(--azul2); box-shadow:0 0 0 3px #2d5a8e33; }
+  button { font-size:18px; border:0; border-radius:10px; padding:14px 16px; cursor:pointer; font-weight:600; }
+  .scan { background:var(--azul2); color:#fff; min-width:60px; font-size:22px; padding:0 14px; }
+  .principal { background:var(--azul); color:#fff; width:100%; margin-top:20px; padding:17px; }
+  .secundario { background:#fff; color:var(--azul); border:1.5px solid var(--azul); width:100%; margin-top:10px; }
+  button:disabled { opacity:.5; }
+  .tarjeta { background:#fff; border:1px solid var(--borde); border-radius:12px; padding:14px; margin-top:12px; }
+  .tarjeta .pos { font-size:24px; font-weight:800; color:var(--azul); letter-spacing:.5px; }
+  .tarjeta .desc { font-weight:600; margin:4px 0; }
+  .tarjeta .datos { color:var(--gris); font-size:15px; display:flex; flex-wrap:wrap; gap:4px 14px; }
+  .tarjeta button { margin-top:10px; width:100%; background:var(--fondo); color:var(--azul); }
+  .venc-vencido { color:var(--rojo); font-weight:700; }
+  .venc-pronto { color:var(--naranja); font-weight:700; }
+  .resumen { color:var(--gris); margin-top:14px; font-size:15px; }
+  .vacio { text-align:center; color:var(--gris); padding:28px 10px; }
+  .exito { text-align:center; }
+  .exito .id { font-size:30px; font-weight:800; color:var(--verde); margin:6px 0; }
+  .exito svg { width:190px; height:190px; }
+  nav { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--borde);
+        display:flex; padding-bottom:env(safe-area-inset-bottom); z-index:5; }
+  nav button { flex:1; background:none; border-radius:0; padding:9px 2px 11px; font-size:12px; color:var(--gris);
+               display:flex; flex-direction:column; align-items:center; gap:2px; font-weight:600; }
+  nav button span { font-size:23px; }
+  nav button.activa { color:var(--azul); box-shadow:inset 0 3px 0 var(--azul); }
+  #modal-lector { position:fixed; inset:0; background:#000d; z-index:20; display:flex; flex-direction:column;
+                  justify-content:center; padding:16px; }
+  #modal-lector[hidden] { display:none; }
+  #lector { background:#000; border-radius:12px; overflow:hidden; width:100%; max-width:520px; margin:0 auto; }
+  #modal-lector p { color:#fff; text-align:center; }
+  #modal-lector button { background:#fff; color:var(--texto); max-width:520px; width:100%; margin:14px auto 0; }
+  #aviso { position:fixed; left:16px; right:16px; bottom:96px; padding:14px 16px; border-radius:10px; color:#fff;
+           font-weight:600; z-index:30; display:none; max-width:528px; margin:0 auto; }
+  #aviso.ok { background:var(--verde); } #aviso.error { background:var(--rojo); }
+  #etiqueta { display:none; }
+  @media print {
+    body > *:not(#etiqueta) { display:none !important; }
+    body { background:#fff; padding:0; }
+    #etiqueta { display:block; text-align:center; font-family:Arial,sans-serif; }
+    #etiqueta svg { width:60mm; height:60mm; }
+    #etiqueta .id { font-size:28pt; font-weight:bold; }
+    #etiqueta .txt { font-size:14pt; margin-top:4pt; }
+  }
+</style>
+</head>
+<body>
+
+<header>Depósito <small id="usuario-header"></small></header>
+
+<main>
+  <!-- BUSCAR -->
+  <section id="buscar" class="activa">
+    <h2>¿Dónde está?</h2>
+    <label for="b-q">Producto, código, pallet o posición</label>
+    <div class="campo">
+      <input id="b-q" placeholder="Ej.: yerba, 7790…, PAL-12, P05-12-N3" autocomplete="off" enterkeyhint="search">
+      <button class="scan" data-para="b-q" aria-label="Escanear">📷</button>
+    </div>
+    <button class="principal" id="b-boton">Buscar</button>
+    <div id="b-res"></div>
+  </section>
+
+  <!-- RECIBIR -->
+  <section id="recibir">
+    <h2>Recibir mercadería</h2>
+    <form id="r-form" autocomplete="off">
+      <label for="r-codigo">Código del producto</label>
+      <div class="campo">
+        <input id="r-codigo" required enterkeyhint="next">
+        <button type="button" class="scan" data-para="r-codigo" aria-label="Escanear">📷</button>
+      </div>
+      <label for="r-desc">Descripción</label>
+      <input id="r-desc" placeholder="Se completa sola si el producto ya existe">
+      <label for="r-cant">Cantidad recibida</label>
+      <input id="r-cant" type="number" inputmode="decimal" min="0" step="any" required>
+      <label for="r-lote">Lote</label>
+      <input id="r-lote">
+      <label for="r-venc">Vencimiento</label>
+      <input id="r-venc" type="date">
+      <button class="principal" type="submit">Registrar ingreso</button>
+    </form>
+    <div id="r-res"></div>
+  </section>
+
+  <!-- UBICAR / MOVER -->
+  <section id="ubicar">
+    <h2>Ubicar o mover pallet</h2>
+    <label for="u-pallet">1. Pallet</label>
+    <div class="campo">
+      <input id="u-pallet" placeholder="PAL-000123" autocomplete="off" enterkeyhint="next">
+      <button class="scan" data-para="u-pallet" aria-label="Escanear">📷</button>
+    </div>
+    <div id="u-info"></div>
+    <label for="u-pos">2. Posición de destino</label>
+    <div class="campo">
+      <input id="u-pos" placeholder="Escaneá el QR del rack" autocomplete="off" enterkeyhint="done">
+      <button class="scan" data-para="u-pos" aria-label="Escanear">📷</button>
+    </div>
+    <button class="principal" id="u-boton">Guardar ubicación</button>
+  </section>
+
+  <!-- SALIDA -->
+  <section id="salida">
+    <h2>Salida de mercadería</h2>
+    <label for="s-q">Pallet o posición</label>
+    <div class="campo">
+      <input id="s-q" placeholder="PAL-000123 o P05-12-N3" autocomplete="off" enterkeyhint="next">
+      <button class="scan" data-para="s-q" aria-label="Escanear">📷</button>
+    </div>
+    <div id="s-info"></div>
+    <div id="s-form" hidden>
+      <label for="s-cant">Cantidad que sale (vacío = todo)</label>
+      <input id="s-cant" type="number" inputmode="decimal" min="0" step="any">
+      <label for="s-nota">Nota (remito, destino…)</label>
+      <input id="s-nota">
+      <button class="principal" id="s-boton">Registrar salida</button>
+    </div>
+  </section>
+
+  <!-- AJUSTES -->
+  <section id="ajustes">
+    <h2>Ajustes</h2>
+    <label for="a-nombre">Tu nombre (queda en el historial)</label>
+    <input id="a-nombre">
+    <label for="a-clave">Clave de acceso</label>
+    <input id="a-clave" type="password">
+    <button class="principal" id="a-guardar">Guardar y probar conexión</button>
+  </section>
+</main>
+
+<nav>
+  <button data-ir="buscar" class="activa"><span>🔍</span>Buscar</button>
+  <button data-ir="recibir"><span>📥</span>Recibir</button>
+  <button data-ir="ubicar"><span>📍</span>Ubicar</button>
+  <button data-ir="salida"><span>📤</span>Salida</button>
+  <button data-ir="ajustes"><span>⚙️</span>Ajustes</button>
+</nav>
+
+<div id="modal-lector" hidden>
+  <div id="lector"></div>
+  <p>Apuntá al código</p>
+  <button id="cancelar-lector">Cancelar</button>
+</div>
+<div id="aviso"></div>
+<div id="etiqueta"></div>
+
+<script>
+// ====== 1) PEGÁ ACÁ LA URL DE TU SCRIPT (termina en /exec) ======
+const API_URL = 'PEGAR_AQUI_LA_URL_DEL_SCRIPT';
+// ================================================================
+
+const $ = s => document.querySelector(s);
+
+// ---------- Ajustes guardados en el celular ----------
+function leerAjuste(k) { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } }
+function guardarAjuste(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+const ajustes = { nombre: leerAjuste('nombre'), clave: leerAjuste('clave') };
+$('#a-nombre').value = ajustes.nombre;
+$('#a-clave').value = ajustes.clave;
+$('#usuario-header').textContent = ajustes.nombre;
+
+// ---------- Comunicación con la planilla ----------
+async function api(accion, datos = {}, escribir = false) {
+  if (API_URL.startsWith('PEGAR')) throw new Error('Falta configurar API_URL en index.html');
+  const base = { accion, clave: ajustes.clave, usuario: ajustes.nombre };
+  const resp = escribir
+    ? await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                             body: JSON.stringify({ ...base, ...datos }) })
+    : await fetch(API_URL + '?' + new URLSearchParams({ ...base, ...datos }));
+  const json = await resp.json();
+  if (!json.ok) { const e = new Error(json.error); e.codigo = json.codigo; throw e; }
+  return json.data;
+}
+
+// Ejecuta una acción mostrando "cargando" en el botón y el error si falla
+async function conCarga(boton, fn) {
+  const texto = boton ? boton.textContent : '';
+  if (boton) { boton.disabled = true; boton.textContent = 'Un momento…'; }
+  try { return await fn(); }
+  catch (e) { avisar(e.message, true); }
+  finally { if (boton) { boton.disabled = false; boton.textContent = texto; } }
+}
+
+let avisoTimer;
+function avisar(texto, esError = false) {
+  const a = $('#aviso');
+  a.textContent = texto; a.className = esError ? 'error' : 'ok'; a.style.display = 'block';
+  clearTimeout(avisoTimer);
+  avisoTimer = setTimeout(() => a.style.display = 'none', esError ? 6000 : 3000);
+  if (navigator.vibrate) navigator.vibrate(esError ? [80, 60, 80] : 60);
+}
+
+// ---------- Navegación ----------
+function ir(id) {
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('activa', s.id === id));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('activa', b.dataset.ir === id));
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => ir(b.dataset.ir));
+
+// ---------- Escaneo con la cámara ----------
+// Cuando un campo recibe un código (por cámara, por lector Zebra o al apretar Enter)
+// se dispara el evento "listo" en ese campo.
+function escanear() {
+  return new Promise((resolve) => {
+    const modal = $('#modal-lector');
+    modal.hidden = false;
+    const lector = new Html5Qrcode('lector', { verbose: false,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+    let terminado = false;
+    const cerrar = async (valor) => {
+      if (terminado) return; terminado = true;
+      try { await lector.stop(); } catch (_) {}
+      try { lector.clear(); } catch (_) {}
+      modal.hidden = true;
+      resolve(valor);
+    };
+    $('#cancelar-lector').onclick = () => cerrar(null);
+    lector.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 180 } },
+      texto => { if (navigator.vibrate) navigator.vibrate(100); cerrar(texto.trim()); }, () => {})
+      .catch(() => { avisar('No se pudo abrir la cámara. Revisá los permisos del navegador.', true); cerrar(null); });
+  });
+}
+
+document.querySelectorAll('.scan').forEach(btn => btn.onclick = async () => {
+  const valor = await escanear();
+  if (!valor) return;
+  const input = document.getElementById(btn.dataset.para);
+  input.value = valor;
+  input.dispatchEvent(new Event('listo'));
+});
+// Lector Zebra (o teclado): escribe el código y manda Enter
+document.querySelectorAll('.campo input').forEach(inp => inp.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); inp.dispatchEvent(new Event('listo')); }
+}));
+
+// ---------- Utilidades de pantalla ----------
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+function claseVenc(v) {
+  if (!v) return '';
+  const dias = (new Date(v + 'T00:00:00') - new Date()) / 86400000;
+  return dias < 0 ? 'venc-vencido' : dias <= 30 ? 'venc-pronto' : '';
+}
+function fechaLinda(v) { if (!v) return '—'; const [a, m, d] = String(v).split('-'); return d ? `${d}/${m}/${a}` : v; }
+
+function tarjetaPallet(p, boton) {
+  return `<div class="tarjeta">
+    <div class="pos">${p.posicion ? esc(p.posicion) : '<span style="color:var(--naranja)">Sin ubicar</span>'}</div>
+    <div class="desc">${esc(p.descripcion)}</div>
+    <div class="datos">
+      <span><b>${esc(p.cantidad)}</b> u.</span>
+      <span class="${claseVenc(p.vencimiento)}">Vence: ${fechaLinda(p.vencimiento)}</span>
+      <span>Lote: ${esc(p.lote) || '—'}</span>
+      <span>${esc(p.pallet_id)}</span>
+    </div>
+    ${boton ? `<button data-pallet="${esc(p.pallet_id)}">${boton}</button>` : ''}
+  </div>`;
+}
+
+function qrSvg(texto) {
+  const qr = qrcode(0, 'M'); qr.addData(texto); qr.make();
+  return qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+}
+
+// ---------- BUSCAR ----------
+async function hacerBusqueda() {
+  const q = $('#b-q').value.trim();
+  if (!q) return $('#b-q').focus();
+  await conCarga($('#b-boton'), async () => {
+    const r = await api('buscar', { q });
+    const n = r.resultados.length;
+    let html = '';
+    if (!n) html = `<div class="vacio">${r.tipo === 'posicion' ? `La posición <b>${esc(r.posicion)}</b> está libre.` : 'No hay nada en depósito que coincida.'}</div>`;
+    else html = `<div class="resumen">${n} pallet${n > 1 ? 's' : ''} · ${r.total} unidades · ordenado por vencimiento</div>`
+              + r.resultados.map(p => tarjetaPallet(p)).join('');
+    $('#b-res').innerHTML = html;
+  });
+}
+$('#b-boton').onclick = hacerBusqueda;
+$('#b-q').addEventListener('listo', hacerBusqueda);
+
+// ---------- RECIBIR ----------
+$('#r-codigo').addEventListener('listo', async () => {
+  const codigo = $('#r-codigo').value.trim();
+  if (!codigo) return;
+  try {
+    const prod = await api('producto', { codigo });
+    if (prod) { $('#r-desc').value = prod.descripcion; $('#r-cant').focus(); }
+    else { $('#r-desc').value = ''; $('#r-desc').focus(); avisar('Producto nuevo: escribí la descripción'); }
+  } catch (e) { avisar(e.message, true); }
+});
+
+$('#r-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const boton = e.submitter || $('#r-form button[type=submit]');
+  await conCarga(boton, async () => {
+    const p = await api('recibir', {
+      codigo_barras: $('#r-codigo').value.trim(), descripcion: $('#r-desc').value.trim(),
+      cantidad: $('#r-cant').value, lote: $('#r-lote').value.trim(), vencimiento: $('#r-venc').value
+    }, true);
+    $('#r-form').reset();
+    $('#r-res').innerHTML = `<div class="tarjeta exito">
+        <div>Ingreso registrado</div>
+        <div class="id">${esc(p.pallet_id)}</div>
+        <div>${esc(p.descripcion)} · ${esc(p.cantidad)} u.</div>
+        ${qrSvg(p.pallet_id)}
+        <button class="secundario" id="r-imprimir">🖨️ Imprimir etiqueta</button>
+        <button class="principal" id="r-ubicar">📍 Ubicar ahora</button>
+      </div>`;
+    $('#r-imprimir').onclick = () => imprimirEtiqueta(p);
+    $('#r-ubicar').onclick = () => { $('#r-res').innerHTML = ''; ubicarPallet(p.pallet_id); };
+    avisar('Ingreso registrado: ' + p.pallet_id);
+  });
+});
+
+function imprimirEtiqueta(p) {
+  $('#etiqueta').innerHTML = `${qrSvg(p.pallet_id)}<div class="id">${esc(p.pallet_id)}</div>
+    <div class="txt">${esc(p.descripcion)}</div>
+    <div class="txt">Cant: ${esc(p.cantidad)} · Lote: ${esc(p.lote) || '—'} · Vence: ${fechaLinda(p.vencimiento)}</div>`;
+  window.print();
+}
+
+// ---------- UBICAR / MOVER ----------
+function ubicarPallet(id) {
+  ir('ubicar');
+  $('#u-pallet').value = id;
+  $('#u-pallet').dispatchEvent(new Event('listo'));
+}
+
+$('#u-pallet').addEventListener('listo', async () => {
+  const id = $('#u-pallet').value.trim();
+  if (!id) return;
+  try {
+    const p = await api('pallet', { id });
+    $('#u-pallet').value = p.pallet_id;
+    $('#u-info').innerHTML = tarjetaPallet(p);
+    $('#u-pos').focus();
+  } catch (e) { $('#u-info').innerHTML = ''; avisar(e.message, true); }
+});
+
+async function guardarUbicacion(forzar = false) {
+  const pallet_id = $('#u-pallet').value.trim(), posicion = $('#u-pos').value.trim();
+  if (!pallet_id) return avisar('Primero escaneá el pallet', true);
+  if (!posicion) return avisar('Falta la posición', true);
+  let reintentar = false;
+  await conCarga($('#u-boton'), async () => {
+    try {
+      const p = await api('ubicar', { pallet_id, posicion, forzar }, true);
+      avisar(`${p.pallet_id} → ${p.posicion}`);
+      $('#u-pallet').value = ''; $('#u-pos').value = ''; $('#u-info').innerHTML = '';
+      $('#u-pallet').focus();
+    } catch (e) {
+      if (e.codigo === 'OCUPADA' && confirm(e.message + '\n\n¿Ubicarlo igual (compartiendo la posición)?')) {
+        reintentar = true; return;
+      }
+      throw e;
+    }
+  });
+  if (reintentar) return guardarUbicacion(true);
+}
+$('#u-boton').onclick = () => guardarUbicacion();
+$('#u-pos').addEventListener('listo', () => guardarUbicacion());
+
+// ---------- SALIDA ----------
+let palletSalida = null;
+
+function elegirParaSalida(p) {
+  palletSalida = p;
+  $('#s-info').innerHTML = tarjetaPallet(p);
+  $('#s-form').hidden = false;
+  $('#s-cant').value = ''; $('#s-cant').placeholder = `Todo: ${p.cantidad}`;
+  $('#s-cant').focus();
+}
+
+$('#s-q').addEventListener('listo', async () => {
+  const q = $('#s-q').value.trim();
+  if (!q) return;
+  palletSalida = null; $('#s-form').hidden = true;
+  try {
+    const r = await api('buscar', { q });
+    const lista = r.resultados;
+    if (!lista.length) { $('#s-info').innerHTML = '<div class="vacio">No hay mercadería ahí.</div>'; return; }
+    if (lista.length === 1 && r.tipo !== 'producto') return elegirParaSalida(lista[0]);
+    $('#s-info').innerHTML = '<div class="resumen">Elegí cuál sale (vence primero, arriba):</div>'
+      + lista.map(p => tarjetaPallet(p, 'Sacar este')).join('');
+    $('#s-info').querySelectorAll('button[data-pallet]').forEach(b =>
+      b.onclick = () => elegirParaSalida(lista.find(p => p.pallet_id === b.dataset.pallet)));
+  } catch (e) { avisar(e.message, true); }
+});
+
+$('#s-boton').onclick = () => conCarga($('#s-boton'), async () => {
+  if (!palletSalida) throw new Error('Elegí un pallet primero');
+  const cant = $('#s-cant').value;
+  const texto = cant ? `${cant} de ${palletSalida.cantidad}` : `todo (${palletSalida.cantidad})`;
+  if (!confirm(`Sale ${texto} de ${palletSalida.pallet_id}\n${palletSalida.descripcion}\n¿Confirmás?`)) return;
+  const p = await api('salida', { pallet_id: palletSalida.pallet_id, cantidad: cant, nota: $('#s-nota').value.trim() }, true);
+  avisar(p.estado === 'DESPACHADO' ? `${p.pallet_id} salió completo. Posición liberada.` : `Quedan ${p.cantidad} en ${p.posicion}`);
+  palletSalida = null; $('#s-form').hidden = true; $('#s-info').innerHTML = '';
+  $('#s-q').value = ''; $('#s-nota').value = '';
+});
+
+// ---------- AJUSTES ----------
+$('#a-guardar').onclick = () => conCarga($('#a-guardar'), async () => {
+  ajustes.nombre = $('#a-nombre').value.trim(); ajustes.clave = $('#a-clave').value;
+  guardarAjuste('nombre', ajustes.nombre); guardarAjuste('clave', ajustes.clave);
+  $('#usuario-header').textContent = ajustes.nombre;
+  await api('ping');
+  avisar('Conectado a la planilla ✔');
+});
+
+if (!ajustes.nombre) ir('ajustes');
+</script>
+</body>
+</html>
